@@ -1,0 +1,30 @@
+﻿<controls:MetroWindow x:Class="elephant_memory.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        Title="Clippy Info" Height="300" Width="400" ResizeMode="CanResize" WindowStartupLocation="Manual" Topmost="True">
+
+    <Grid>
+        <TabControl Margin="0,0,0,47" x:Name="TabController">
+            <TabItem Header="Text" x:Name="TabText">
+                <TextBox x:Name="DataText" BorderBrush="{x:Null}" BorderThickness="0"  ></TextBox>
+            </TabItem>
+            <TabItem Header="Rich Text" x:Name="TabRtf">
+                <RichTextBox x:Name="DataRtf"  BorderBrush="{x:Null}" BorderThickness="0" />
+            </TabItem>
+            <TabItem Header="Image" x:Name="TabImage">
+                <Image x:Name="DataImage"></Image>
+            </TabItem>
+            <TabItem Header="Files" x:Name="TabFiles">
+                <TextBox x:Name="DataFiles"  BorderBrush="{x:Null}" BorderThickness="0" ></TextBox>
+            </TabItem>
+            <TabItem Header="Html" x:Name="TabHtml">
+                <TextBox x:Name="DataHtml"  BorderBrush="{x:Null}" BorderThickness="0" ></TextBox>
+            </TabItem>
+        </TabControl>
+        <TextBlock Margin="80,229,140,10" x:Name="TimeText"></TextBlock>
+        <Button Margin="0,0,10,10" Height="30" Width="130" HorizontalAlignment="Right" VerticalAlignment="Bottom" Style="{DynamicResource MetroFlatButton}" Click="Button_SetToClipClick" Content="Set to Clipboard"></Button>
+        <Button Margin="10,0,0,10" Height="30" Width="30" HorizontalAlignment="Left"  VerticalAlignment="Bottom" Style="{DynamicResource MetroCircleButtonStyle}" Content="ß" FontFamily="Wingdings" Foreground="#FF878787" Click="Button_PrevClick" x:Name="PrevButton" />
+        <Button Margin="45,0,0,10" Height="30" Width="30" HorizontalAlignment="Left"  VerticalAlignment="Bottom" Style="{DynamicResource MetroCircleButtonStyle}"  Content="à" FontFamily="Wingdings" Foreground="#FF878787" Click="Button_NextClick" x:Name="NextButton" />
+    </Grid>
+</controls:MetroWindow>
