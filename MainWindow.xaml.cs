@@ -3,138 +3,153 @@ using Raven.Client.Document;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace elephant_memory
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
         LinkedList<ClipboardSnapshot> CachedSnapshots = new LinkedList<ClipboardSnapshot>();
-
-        IntPtr WindowHandle;
-        IntPtr NextClipboardViewer;
-
-        const int WmChangecbchain = 0x030D;
-        const int WmDrawclipboard = 0x308;
-
-        IDataObject LastClipData;
-        ClipboardSnapshot LastClip;
+        IDocumentStore store;
+        LinkedListNode<ClipboardSnapshot> Current;
 
         public MainWindow()
         {
             InitializeComponent();
+
+            store = new DocumentStore
+            {
+                Url = "http://localhost:8080/",
+                DefaultDatabase = "elephant-memory",
+            }.Initialize();
         }
 
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
 
-            HwndSource source = PresentationSource.FromVisual(this) as HwndSource;
-            source.AddHook(WndProc);
-            WindowHandle = source.Handle;
+            var source = PresentationSource.FromVisual(this) as HwndSource;
+            ClipboardHook.Start(ClipboardChanged, source);
 
-            NextClipboardViewer = NativeMethods.SetClipboardViewer(WindowHandle);
-
-            ShortcutManager.Next += ShortcutManager_Next;
-            ShortcutManager.Previous += ShortcutManager_Previous;
+            ShortcutManager.Next += GoToNextClipboard;
+            ShortcutManager.Previous += GoToPreviousClipboard;
             ShortcutManager.ToggleVisibility += ShortcutManager_ToggleVisibility;
 
-            //ShortcutManager.Start();
+            ShortcutManager.Start();
         }
 
-        private void ShortcutManager_ToggleVisibility(bool obj)
+        void ClipboardChanged(ClipboardSnapshot snapshot)
         {
+            Current = CachedSnapshots.AddLast(snapshot);
+            UpdateUI(snapshot);
+
+            //using (var session = store.OpenSession())
+            //{
+            //    session.Store(snapshot);
+            //    session.SaveChanges();
+            //}
         }
 
-        private void ShortcutManager_Previous()
+        private void ShortcutManager_ToggleVisibility(bool visible)
         {
-        }
-
-        private void ShortcutManager_Next()
-        {
-        }
-
-        void SaveItem(ClipboardSnapshot snapshot)
-        {
-            using (IDocumentStore store = new DocumentStore
+            if (visible)
             {
-                Url = "http://localhost:8080/",
-                DefaultDatabase = "elephant-memory",
-            }.Initialize())
-            {
-                using (var session = store.OpenSession())
-                {
-                    session.Store(snapshot);
-                    session.SaveChanges();
-                }
+                WindowState = WindowState.Normal;
+                Show();
+                Topmost = true;
+                Activate();
             }
-        }
-
-        void ClipboardChanged()
-        {
-            if (LastClipData == null || !Clipboard.IsCurrent(LastClipData))
+            else
             {
-                LastClipData = Clipboard.GetDataObject();
-                var data = ClipboardSnapshot.CreateSnapshot(LastClipData);
-
-                if (LastClip != null && data.EqualsExceptTime(LastClip))
-                    return;
-
-                LastClip = data;
-                CachedSnapshots.AddLast(data);
-
-                SaveItem(data);
+                Hide();
             }
         }
 
 
-        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        private void GoToPreviousClipboard()
         {
-            if (msg == WmDrawclipboard)
+            if (Current.Previous != null)
             {
-                ClipboardChanged();
-                return IntPtr.Zero;
+                Current = Current.Previous;
+                UpdateUI(Current.Value);
             }
-            if (msg == WmChangecbchain)
-            {
-                if (wParam == NextClipboardViewer)
-                    NextClipboardViewer = lParam;
-                else
-                    NativeMethods.SendMessage(NextClipboardViewer, msg, wParam, lParam);
-
-                return IntPtr.Zero;
-            }
-
-            return IntPtr.Zero;
         }
 
-        private void Button_SetToClipClick(object sender, RoutedEventArgs e)
+        private void GoToNextClipboard()
         {
-
-
+            if (Current.Next != null)
+            {
+                Current = Current.Next;
+                UpdateUI(Current.Value);
+            }
         }
+
 
         private void Button_PrevClick(object sender, RoutedEventArgs e)
         {
+            GoToPreviousClipboard();
         }
 
         private void Button_NextClick(object sender, RoutedEventArgs e)
         {
+            GoToNextClipboard();
+        }
+
+
+        string TimeToText(DateTime pastTime)
+        {
+            var time = DateTime.Now - pastTime;
+            var date = pastTime.Date;
+            var today = DateTime.Today;
+
+            if (time < TimeSpan.FromMinutes(120)) return Math.Ceiling(time.TotalMinutes) + " minuter sedan";
+            else if (time < TimeSpan.FromHours(48)) return Math.Ceiling(time.TotalHours) + " timmar sedan";
+            else return Math.Ceiling(time.TotalDays) + " dagar sedan";
+        }
+
+        void UpdateUI(ClipboardSnapshot data)
+        {
+            TimeText.Text = TimeToText(data.Time);
+
+            if (data.Text.NotEmpty()) DataText.Text = data.Text;
+            TabText.Visibility = data.Text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+
+            if (data.Files.NotEmpty()) DataFiles.Text = string.Join(Environment.NewLine, data.Files);
+            TabFiles.Visibility = data.Files.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+
+            if (data.Html.NotEmpty()) DataHtml.Text = data.FormatHtml();
+            TabHtml.Visibility = data.Html.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+
+            if (data.Rtf.NotEmpty())
+            {
+                DataRtf.SelectAll();
+                using (var stream = new MemoryStream(Encoding.Default.GetBytes(data.Rtf)))
+                    DataRtf.Selection.Load(stream, DataFormats.Rtf);
+            }
+            TabRtf.Visibility = data.Rtf.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+
+            if (data.PngImageData != null)
+                using (MemoryStream stream = new MemoryStream(data.PngImageData))
+                    DataImage.Source = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            TabImage.Visibility = data.PngImageData != null ? Visibility.Visible : Visibility.Collapsed;
+
+
+            for (int i = 0; i < TabController.Items.Count; i++)
+            {
+                var item = TabController.Items[i] as TabItem;
+                if (item != null && item.Visibility == Visibility.Visible)
+                {
+                    TabController.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            //PrevButton.Visibility = PrevData == null ? Visibility.Hidden : Visibility.Visible;
+            //NextButton.Visibility = NextData == null ? Visibility.Hidden : Visibility.Visible;
         }
     }
 }

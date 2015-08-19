@@ -76,7 +76,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Extentions.cs" />
+    <Compile Include="Hooks\ClipboardHook.cs" />
     <Compile Include="ClipboardSnapshot.cs" />
+    <Compile Include="Hooks\KeyboardHook.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="ShortcutManager.cs" />
     <Page Include="MainWindow.xaml">

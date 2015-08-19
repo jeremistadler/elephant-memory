@@ -29,7 +29,6 @@ namespace elephant_memory
                     Time = DateTime.Now,
                     ConvertableFormats = data.GetFormats(true),
                     ExactFormats = data.GetFormats(false),
-
                 };
 
                 if (clip.ConvertableFormats.Contains(DataFormats.Bitmap))
@@ -135,7 +134,7 @@ namespace elephant_memory
             return result;
         }
 
-        string FormatHtml()
+        public string FormatHtml()
         {
             string ContentStart = "<!--StartFragment-->";
             string ContentEnd = "<!--EndFragment-->";
@@ -157,14 +156,6 @@ namespace elephant_memory
                 result = Html;
 
             return result;
-        }
-
-        string FormatFiles()
-        {
-            if (Files == null || Files.Length == 0)
-                return "";
-
-            return string.Join(Environment.NewLine, Files);
         }
 
         public bool EqualsExceptTime(ClipboardSnapshot other)

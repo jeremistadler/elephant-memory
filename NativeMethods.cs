@@ -23,6 +23,9 @@ namespace elephant_memory
         public const int WM_SYSKEYDOWN = 0x104;
         public const int WM_SYSKEYUP = 0x105;
 
+        public const int WM_Changecbchain = 0x030D;
+        public const int WM_Drawclipboard = 0x308;
+
         public delegate int keyboardHookProc(int code, int wParam, ref keyboardHookStruct lParam);
 
 
