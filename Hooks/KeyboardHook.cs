@@ -50,8 +50,8 @@ namespace elephant_memory
 
             if (code >= 0 && wParam == 256) // KeyDown
             {
-                if (KeysDown.ContainsKey(lParam.vkCode) && 
-                    KeysDown[lParam.vkCode] == false &&
+                if ((!KeysDown.ContainsKey(lParam.vkCode) ||
+                    KeysDown[lParam.vkCode] == false) &&
                     ShouldCancelKeyDown(lParam.vkCode))
                 {
                     return 0;

@@ -20,26 +20,13 @@ namespace elephant_memory
         public MainWindow()
         {
             InitializeComponent();
+            this.AllowsTransparency = true;
 
-            store = new DocumentStore
-            {
-                Url = "http://localhost:8080/",
-                DefaultDatabase = "elephant-memory",
-            }.Initialize();
-        }
-
-        protected override void OnSourceInitialized(EventArgs e)
-        {
-            base.OnSourceInitialized(e);
-
-            var source = PresentationSource.FromVisual(this) as HwndSource;
-            ClipboardHook.Start(ClipboardChanged, source);
-
-            ShortcutManager.Next += GoToNextClipboard;
-            ShortcutManager.Previous += GoToPreviousClipboard;
-            ShortcutManager.ToggleVisibility += ShortcutManager_ToggleVisibility;
-
-            ShortcutManager.Start();
+            //store = new DocumentStore
+            //{
+            //    Url = "http://localhost:8080/",
+            //    DefaultDatabase = "elephant-memory",
+            //}.Initialize();
         }
 
         void ClipboardChanged(ClipboardSnapshot snapshot)
@@ -150,6 +137,29 @@ namespace elephant_memory
 
             //PrevButton.Visibility = PrevData == null ? Visibility.Hidden : Visibility.Visible;
             //NextButton.Visibility = NextData == null ? Visibility.Hidden : Visibility.Visible;
+        }
+
+        private void MetroWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            var source = PresentationSource.FromVisual(this) as HwndSource;
+            ClipboardHook.Start(ClipboardChanged, source);
+
+            ShortcutManager.Next += GoToNextClipboard;
+            ShortcutManager.Previous += GoToPreviousClipboard;
+            ShortcutManager.ToggleVisibility += ShortcutManager_ToggleVisibility;
+
+            ShortcutManager.Start();
+        }
+
+        bool isFirst = true;
+
+        private void MetroWindow_Activated(object sender, EventArgs e)
+        {
+            if (isFirst)
+            {
+                Hide();
+                isFirst = false;
+            }
         }
     }
 }
