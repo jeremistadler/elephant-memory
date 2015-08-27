@@ -10,6 +10,8 @@ namespace elephant_memory
 {
     public class ClipboardSnapshot
     {
+        public int Id { get; set; }
+
         public DateTime Time { get; set; }
 
         public string Rtf { get; set; }
@@ -164,10 +166,10 @@ namespace elephant_memory
                    Html == other.Html &&
                    Rtf == other.Rtf &&
 
-                  ((Files == null && other.Files == null) || Files.SequenceEqual(other.Files)) &&
-                  ((PngImageData == null && other.PngImageData == null) || PngImageData.SequenceEqual(other.PngImageData)) &&
-                  ConvertableFormats.OrderBy(f => f).SequenceEqual(other.ConvertableFormats.OrderBy(f => f)) &&
-                  ExactFormats.OrderBy(f => f).SequenceEqual(other.ExactFormats.OrderBy(f => f));
+                  Files.ArraysEquals(other.Files) &&
+                  PngImageData.ArraysEquals(other.PngImageData) &&
+                  ConvertableFormats.ArraysEquals(other.ConvertableFormats) &&
+                  ExactFormats.ArraysEquals(other.ExactFormats);
         }
 
         public override string ToString()
@@ -175,9 +177,9 @@ namespace elephant_memory
             string type = "Type: ";
             if (!string.IsNullOrEmpty(Text)) type += "Text, ";
             if (PngImageData != null) type += "Image, ";
-            //if (Fil) type += "Files, ";
-            //(HasHtml) type += "Html, ";
-            //(HasRtf) type += "Rtf, ";
+            if (Files.NotEmpty()) type += "Files, ";
+            if (string.IsNullOrWhiteSpace(Html)) type += "Html, ";
+            if (string.IsNullOrWhiteSpace(Rtf)) type += "Rtf, ";
 
             type = type.Remove(type.Length - 2, 2);
 

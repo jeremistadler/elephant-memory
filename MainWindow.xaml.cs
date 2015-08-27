@@ -1,11 +1,14 @@
 ﻿using Raven.Client;
 using Raven.Client.Document;
+using Raven.Client.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
@@ -14,19 +17,19 @@ namespace elephant_memory
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
         LinkedList<ClipboardSnapshot> CachedSnapshots = new LinkedList<ClipboardSnapshot>();
-        IDocumentStore store;
+        IDocumentStore Store;
         LinkedListNode<ClipboardSnapshot> Current;
 
         public MainWindow()
         {
             InitializeComponent();
-            this.AllowsTransparency = true;
+            AllowsTransparency = true;
 
-            //store = new DocumentStore
-            //{
-            //    Url = "http://localhost:8080/",
-            //    DefaultDatabase = "elephant-memory",
-            //}.Initialize();
+            Store = new DocumentStore
+            {
+                Url = "http://raven.jeremi.se/",
+                DefaultDatabase = "elephant-memory",
+            }.Initialize();
         }
 
         void ClipboardChanged(ClipboardSnapshot snapshot)
@@ -34,17 +37,23 @@ namespace elephant_memory
             Current = CachedSnapshots.AddLast(snapshot);
             UpdateUI(snapshot);
 
-            //using (var session = store.OpenSession())
-            //{
-            //    session.Store(snapshot);
-            //    session.SaveChanges();
-            //}
+            using (var session = Store.OpenSession())
+            {
+                session.Store(snapshot);
+                session.SaveChanges();
+            }
         }
 
         private void ShortcutManager_ToggleVisibility(bool visible)
         {
             if (visible)
             {
+                Point mousePositionInApp = NativeMethods.GetMousePosition();
+                mousePositionInApp.Offset(-this.Width / 2, -this.Height / 2);
+
+                this.Left = Math.Max(0, mousePositionInApp.X);
+                this.Top = Math.Max(0, mousePositionInApp.Y);
+
                 WindowState = WindowState.Normal;
                 Show();
                 Topmost = true;
@@ -59,19 +68,48 @@ namespace elephant_memory
 
         private void GoToPreviousClipboard()
         {
+            if (Current == null) return;
             if (Current.Previous != null)
             {
                 Current = Current.Previous;
                 UpdateUI(Current.Value);
             }
+            else
+            {
+                using (var session = Store.OpenSession())
+                {
+                    var itemTask = session.Query<ClipboardSnapshot>().Where(f => f.Time < Current.Value.Time).OrderByDescending(f => f.Time).FirstOrDefault();
+                    if (itemTask != null)
+                    {
+                        Current = Current.List.AddBefore(Current, itemTask);
+                        UpdateUI(Current.Value);
+                        Current.Value.SetToClipboard();
+                    }
+                }
+            }
         }
 
         private void GoToNextClipboard()
         {
+            if (Current == null) return;
             if (Current.Next != null)
             {
                 Current = Current.Next;
                 UpdateUI(Current.Value);
+            }
+            else
+            {
+                using (var session = Store.OpenSession())
+                {
+                    var time = Current.Value.Time;
+                    var itemTask = session.Query<ClipboardSnapshot>().Where(f => f.Time > time).OrderBy(f => f.Time).FirstOrDefault();
+                    if (itemTask != null)
+                    {
+                        Current = Current.List.AddAfter(Current, itemTask);
+                        UpdateUI(Current.Value);
+                        Current.Value.SetToClipboard();
+                    }
+                }
             }
         }
 
@@ -152,8 +190,7 @@ namespace elephant_memory
         }
 
         bool isFirst = true;
-
-        private void MetroWindow_Activated(object sender, EventArgs e)
+        void MetroWindow_Activated(object sender, EventArgs e)
         {
             if (isFirst)
             {

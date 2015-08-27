@@ -36,7 +36,7 @@ namespace elephant_memory
         {
             if (!Visible && keyCode == ShiftKey)
             {
-                if (LastCtrlDown.HasValue && (DateTime.UtcNow - LastCtrlDown.Value) < TimeSpan.FromSeconds(1))
+                if (LastCtrlDown.HasValue && (DateTime.UtcNow - LastCtrlDown.Value) < TimeSpan.FromSeconds(0.5))
                 {
                     Visible = true;
                     ToggleVisibility(true);
