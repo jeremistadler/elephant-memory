@@ -12,7 +12,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
-namespace elephant_memory
+namespace Reflection
 {
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
@@ -28,7 +28,7 @@ namespace elephant_memory
             Store = new DocumentStore
             {
                 Url = "http://raven.jeremi.se/",
-                DefaultDatabase = "elephant-memory",
+                DefaultDatabase = "Reflection",
             }.Initialize();
         }
 

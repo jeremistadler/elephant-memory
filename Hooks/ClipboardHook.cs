@@ -2,7 +2,7 @@
 using System.Windows;
 using System.Windows.Interop;
 
-namespace elephant_memory
+namespace Reflection
 {
     internal static class ClipboardHook
     {

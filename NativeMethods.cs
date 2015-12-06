@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 
 
-namespace elephant_memory
+namespace Reflection
 {
     internal static class NativeMethods
     {

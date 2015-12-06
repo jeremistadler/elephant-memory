@@ -6,7 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media.Imaging;
 
-namespace elephant_memory
+namespace Reflection
 {
     public class ClipboardSnapshot
     {

@@ -1,7 +1,7 @@
-﻿<Application x:Class="elephant_memory.App"
+﻿<Application x:Class="Reflection.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:elephant_memory"
+             xmlns:local="clr-namespace:Reflection"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>

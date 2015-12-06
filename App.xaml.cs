@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
-namespace elephant_memory
+namespace Reflection
 {
     /// <summary>
     /// Interaction logic for App.xaml

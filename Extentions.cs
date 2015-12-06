@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace elephant_memory
+namespace Reflection
 {
     public static class Extentions
     {

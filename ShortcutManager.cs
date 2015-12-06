@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace elephant_memory
+namespace Reflection
 {
     internal static class ShortcutManager
     {
