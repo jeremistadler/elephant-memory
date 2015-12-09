@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,7 +12,7 @@ namespace Reflection
 {
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
-        HashSet<ClipboardSnapshot> Cache = new HashSet<ClipboardSnapshot>();
+        List<ClipboardSnapshot> Cache = new List<ClipboardSnapshot>();
         ClipboardSnapshot Current;
         IStorage Storage;
         bool IsLoading = false;
@@ -44,7 +45,7 @@ namespace Reflection
             Current = snapshot;
             UpdateUI(snapshot);
 
-            if (!Cache.Contains(snapshot))
+            if (!Cache.Any(f => f.EqualsExceptTime(snapshot)))
                 Storage.Save(snapshot);
         }
 
@@ -132,6 +133,10 @@ namespace Reflection
         {
             TimeText.Text = TimeToText(data.Time);
             TimeText.Text = data.Time.ToLocalTime().ToString("HH:mm:ss") + "  (" + TimeToText(data.Time.ToLocalTime()) + ")";
+
+            DataText.Text = "";
+            DataFiles.Text = "";
+            DataHtml.Text = "";
 
             if (data.Text.NotEmpty()) DataText.Text = data.Text;
             TabText.Visibility = data.Text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;

@@ -80,6 +80,8 @@ namespace Reflection
             if (targetPointer == null)
                 return null;
 
+            System.Diagnostics.Debug.WriteLine("From " + pointer.RowKey + " clipboard snapshot: " + targetPointer.RowKey);
+
             var blob = BlobContainer.GetBlockBlobReference(targetPointer.GetBlobStoragePath());
 
             var data = new MemoryStream();
@@ -88,7 +90,6 @@ namespace Reflection
                 return ClipboardSnapshot.CreateEmptySnapshot(targetPointer.GetTime());
 
             data.Position = 0;
-            System.Diagnostics.Debug.WriteLine("Loaded clipboard snapshot of size: " + data.Length + " bytes");
             return ClipboardSnapshot.Deserialize(data);
         }
     }

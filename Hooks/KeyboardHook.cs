@@ -43,7 +43,7 @@ namespace Reflection
 
         public static int HookCallback(int code, int wParam, ref NativeMethods.keyboardHookStruct lParam)
         {
-            Debug.WriteLine(code + " " + wParam + "  " + lParam.vkCode + " " + lParam.scanCode + " " + lParam.flags);
+            //Debug.WriteLine(code + " " + wParam + "  " + lParam.vkCode + " " + lParam.scanCode + " " + lParam.flags);
 
             if (code >= 0 && wParam == 256) // KeyDown
             {

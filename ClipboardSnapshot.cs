@@ -33,11 +33,11 @@ namespace Reflection
         public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time)
         {
             PartitionKey = partitionKey + "-reversed";
-            RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0').Reverse();
+            RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0').NumberReverse();
         }
 
-        public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.Reverse();
-        public DateTime GetTime() => new DateTime(long.Parse(RowKey.Reverse().TrimStart('0')), DateTimeKind.Utc);
+        public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.NumberReverse();
+        public DateTime GetTime() => new DateTime(long.Parse(RowKey.NumberReverse().TrimStart('0')), DateTimeKind.Utc);
     }
 
 

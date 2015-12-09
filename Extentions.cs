@@ -27,11 +27,17 @@ namespace Reflection
             return array1.SequenceEqual(array2); 
         }
 
-        public static string Reverse(this string s)
+        public static string NumberReverse(this string s)
         {
-            char[] charArray = s.ToCharArray();
-            Array.Reverse(charArray);
-            return new string(charArray);
+            var arr = s.ToCharArray();
+            for (int i = 0; i < arr.Length; i++)
+            {
+                var t = 10 - (arr[i] - 48);
+                if (t == 10) t = 0;
+                arr[i] = (char)(t + 48);
+
+            }
+            return new string(arr);
         }
     }
 }
