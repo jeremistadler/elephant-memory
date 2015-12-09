@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 
 namespace Reflection
 {
@@ -16,6 +15,8 @@ namespace Reflection
         const int ShiftKey = 160;
         const int LeftKey = 37;
         const int RightKey = 39;
+        const int AKey = 65;
+        const int DKey = 68;
 
 
         static ShortcutManager()
@@ -45,12 +46,12 @@ namespace Reflection
                 else
                     LastCtrlDown = DateTime.UtcNow;
             }
-            else if (Visible && keyCode == LeftKey)
+            else if (Visible && (keyCode == LeftKey || keyCode == AKey))
             {
                 Previous();
                 return true;
             }
-            else if (Visible && keyCode == RightKey)
+            else if (Visible && (keyCode == RightKey || keyCode == DKey))
             {
                 Next();
                 return true;
@@ -69,70 +70,13 @@ namespace Reflection
                     ToggleVisibility(false);
                 }
 
-                if (keyCode == LeftKey || keyCode == RightKey)
+                if (keyCode == LeftKey || keyCode == RightKey || keyCode == AKey || keyCode == DKey)
                 {
                     return true;
                 }
             }
 
             return false;
-        }
-
-
-        static int hookProc(int code, int wParam, ref NativeMethods.keyboardHookStruct lParam)
-        {
-            Debug.WriteLine(code + " " + wParam + "  " + lParam.vkCode + " " + lParam.scanCode + " " + lParam);
-            return 0;
-
-            //if (code >= 0 && wParam == 257) // KeyUp
-            //{
-            //    bool skipSet = false;
-
-            //    if (lParam.vkCode == 162 &&
-            //        LastKey == 162)
-            //    {
-            //        Visible = !Visible;
-            //        ToggleVisibility(Visible);
-            //        LastKey = -1;
-            //        skipSet = true;
-            //    }
-
-            //    if (lParam.vkCode == 37 &&
-            //        LastKey == -1 &&
-            //        Visible)
-            //    {
-            //        Debug.WriteLine("Prev Begin");
-            //        Previous();
-            //        Debug.WriteLine("Prev End");
-            //        skipSet = true;
-            //        //return 1;
-            //    }
-
-            //    if (lParam.vkCode == 39 &&
-            //        LastKey == -1 &&
-            //        Visible)
-            //    {
-            //        Debug.WriteLine("Next Begin");
-            //        Next();
-            //        Debug.WriteLine("Next End");
-            //        skipSet = true;
-            //        //return 1;
-            //    }
-
-            //    if (!skipSet)
-            //    {
-            //        LastKey = lParam.vkCode;
-
-            //        //if (Visible)
-            //        //{
-            //        //    Visible = false;
-            //        //    ToggleVisibility(Visible);
-            //        //}
-            //    }
-            //}
-
-
-            //return NativeMethods.CallNextHookEx(KeyboardHook, code, wParam, ref lParam);
         }
     }
 }

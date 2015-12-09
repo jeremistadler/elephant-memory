@@ -1,14 +1,9 @@
-﻿using Raven.Client;
-using Raven.Client.Document;
-using Raven.Client.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
@@ -16,38 +11,49 @@ namespace Reflection
 {
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
-        LinkedList<ClipboardSnapshot> CachedSnapshots = new LinkedList<ClipboardSnapshot>();
-        IDocumentStore Store;
-        LinkedListNode<ClipboardSnapshot> Current;
+        HashSet<ClipboardSnapshot> Cache = new HashSet<ClipboardSnapshot>();
+        ClipboardSnapshot Current;
+        IStorage Storage;
+        bool IsLoading = false;
 
         public MainWindow()
         {
             InitializeComponent();
             AllowsTransparency = true;
-
-            Store = new DocumentStore
-            {
-                Url = "http://raven.jeremi.se/",
-                DefaultDatabase = "Reflection",
-            }.Initialize();
         }
+
+
+        private void MetroWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            Storage = new TableClipStorage();
+            var source = PresentationSource.FromVisual(this) as HwndSource;
+            ClipboardHook.Start(ClipboardChanged, source);
+
+            ShortcutManager.Next += GoToNextClipboard;
+            ShortcutManager.Previous += GoToPreviousClipboard;
+            ShortcutManager.ToggleVisibility += ShortcutManager_ToggleVisibility;
+
+            ShortcutManager.Start();
+        }
+
 
         void ClipboardChanged(ClipboardSnapshot snapshot)
         {
-            Current = CachedSnapshots.AddLast(snapshot);
+            System.Diagnostics.Debug.WriteLine("Clipboard changed");
+
+            Current = snapshot;
             UpdateUI(snapshot);
 
-            using (var session = Store.OpenSession())
-            {
-                session.Store(snapshot);
-                session.SaveChanges();
-            }
+            if (!Cache.Contains(snapshot))
+                Storage.Save(snapshot);
         }
 
         private void ShortcutManager_ToggleVisibility(bool visible)
         {
             if (visible)
             {
+                System.Diagnostics.Debug.WriteLine("Showing UI");
+
                 Point mousePositionInApp = NativeMethods.GetMousePosition();
                 mousePositionInApp.Offset(-this.Width / 2, -this.Height / 2);
 
@@ -61,6 +67,7 @@ namespace Reflection
             }
             else
             {
+                System.Diagnostics.Debug.WriteLine("Hiding UI");
                 Hide();
             }
         }
@@ -68,62 +75,37 @@ namespace Reflection
 
         private void GoToPreviousClipboard()
         {
-            if (Current == null) return;
-            if (Current.Previous != null)
+            if (IsLoading) return; IsLoading = true;
+
+            var date = Current?.Time ?? DateTime.Now;
+            Storage.GetPrevious(date).ContinueWith(task =>
             {
-                Current = Current.Previous;
-                UpdateUI(Current.Value);
-            }
-            else
-            {
-                using (var session = Store.OpenSession())
+                IsLoading = false;
+                if (task.Result != null)
                 {
-                    var itemTask = session.Query<ClipboardSnapshot>().Where(f => f.Time < Current.Value.Time).OrderByDescending(f => f.Time).FirstOrDefault();
-                    if (itemTask != null)
-                    {
-                        Current = Current.List.AddBefore(Current, itemTask);
-                        UpdateUI(Current.Value);
-                        Current.Value.SetToClipboard();
-                    }
+                    Current = task.Result;
+                    Cache.Add(Current);
+                    UpdateUIAndSetToClipboardAsync(Current);
                 }
-            }
+            });
         }
 
         private void GoToNextClipboard()
         {
             if (Current == null) return;
-            if (Current.Next != null)
+            if (IsLoading) return; IsLoading = true;
+
+            Storage.GetNext(Current.Time).ContinueWith(task =>
             {
-                Current = Current.Next;
-                UpdateUI(Current.Value);
-            }
-            else
-            {
-                using (var session = Store.OpenSession())
+                IsLoading = false;
+                if (task.Result != null)
                 {
-                    var time = Current.Value.Time;
-                    var itemTask = session.Query<ClipboardSnapshot>().Where(f => f.Time > time).OrderBy(f => f.Time).FirstOrDefault();
-                    if (itemTask != null)
-                    {
-                        Current = Current.List.AddAfter(Current, itemTask);
-                        UpdateUI(Current.Value);
-                        Current.Value.SetToClipboard();
-                    }
+                    Current = task.Result;
+                    Cache.Add(Current);
+                    UpdateUIAndSetToClipboardAsync(Current);
                 }
-            }
+            });
         }
-
-
-        private void Button_PrevClick(object sender, RoutedEventArgs e)
-        {
-            GoToPreviousClipboard();
-        }
-
-        private void Button_NextClick(object sender, RoutedEventArgs e)
-        {
-            GoToNextClipboard();
-        }
-
 
         string TimeToText(DateTime pastTime)
         {
@@ -136,9 +118,20 @@ namespace Reflection
             else return Math.Ceiling(time.TotalDays) + " dagar sedan";
         }
 
+
+        void UpdateUIAndSetToClipboardAsync(ClipboardSnapshot data)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                UpdateUI(data);
+                data.SetToClipboard();
+            });
+        }
+
         void UpdateUI(ClipboardSnapshot data)
         {
             TimeText.Text = TimeToText(data.Time);
+            TimeText.Text = data.Time.ToLocalTime().ToString("HH:mm:ss") + "  (" + TimeToText(data.Time.ToLocalTime()) + ")";
 
             if (data.Text.NotEmpty()) DataText.Text = data.Text;
             TabText.Visibility = data.Text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
@@ -175,18 +168,6 @@ namespace Reflection
 
             //PrevButton.Visibility = PrevData == null ? Visibility.Hidden : Visibility.Visible;
             //NextButton.Visibility = NextData == null ? Visibility.Hidden : Visibility.Visible;
-        }
-
-        private void MetroWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            var source = PresentationSource.FromVisual(this) as HwndSource;
-            ClipboardHook.Start(ClipboardChanged, source);
-
-            ShortcutManager.Next += GoToNextClipboard;
-            ShortcutManager.Previous += GoToPreviousClipboard;
-            ShortcutManager.ToggleVisibility += ShortcutManager_ToggleVisibility;
-
-            ShortcutManager.Start();
         }
 
         bool isFirst = true;
