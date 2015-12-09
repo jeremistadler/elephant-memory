@@ -12,30 +12,48 @@ namespace Reflection
     {
         string GetBlobStoragePath();
         DateTime GetTime();
+        int Id { get; set; }
     }
 
     public class ClipboardSnapshotPointer : TableEntity, ISnapshotPointer
     {
         public ClipboardSnapshotPointer() { }
-        public ClipboardSnapshotPointer(string partitionKey, DateTime time)
+        public ClipboardSnapshotPointer(string partitionKey, DateTime time, int id)
         {
             PartitionKey = partitionKey;
             RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0');
+            Id = id;
         }
 
+        public int Id { get; set; }
         public string GetBlobStoragePath() => PartitionKey + "/" + RowKey;
         public DateTime GetTime() => new DateTime(long.Parse(RowKey.TrimStart('0')), DateTimeKind.Utc);
     }
 
+    //public class ClipboardSnapshotPointer : TableEntity, ISnapshotPointer
+    //{
+    //    public ClipboardSnapshotPointer() { }
+    //    public ClipboardSnapshotPointer(string partitionKey, DateTime time, int id)
+    //    {
+    //        PartitionKey = partitionKey;
+    //        RowKey = time.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffff");
+    //    }
+
+    //    public DateTime Time { get; set; }
+    //    public string GetBlobStoragePath() => PartitionKey + "/" + Time.ToUniversalTime().Ticks;
+    //}
+
     public class ClipboardSnapshotPointerReverse : TableEntity, ISnapshotPointer
     {
         public ClipboardSnapshotPointerReverse() { }
-        public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time)
+        public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time, int id)
         {
             PartitionKey = partitionKey + "-reversed";
             RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0').NumberReverse();
+            Id = id;
         }
 
+        public int Id { get; set; }
         public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.NumberReverse();
         public DateTime GetTime() => new DateTime(long.Parse(RowKey.NumberReverse().TrimStart('0')), DateTimeKind.Utc);
     }
