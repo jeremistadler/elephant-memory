@@ -141,11 +141,13 @@ namespace Reflection
             DataFiles.Text = "";
             DataHtml.Text = "";
 
-            if (data.Text.NotEmpty()) DataText.Text = data.Text;
-            TabText.Visibility = data.Text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+            var text = (data.Data.FirstOrDefault(f => f.Format == DataFormats.Text) as SnapshotStringData)?.Data;
+            if (text.NotEmpty()) DataText.Text = text;
+            TabText.Visibility = text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            //if (data.Files.NotEmpty()) DataFiles.Text = string.Join(Environment.NewLine, data.Files);
-            //TabFiles.Visibility = data.Files.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+            var files = (data.Data.FirstOrDefault(f => f.Format == DataFormats.FileDrop) as SnapshotStringArrayData)?.Data;
+            if (files.NotEmpty()) DataFiles.Text = string.Join(Environment.NewLine, files);
+            TabFiles.Visibility = files.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
             //if (data.Html.NotEmpty()) DataHtml.Text = data.FormatHtml();
             //TabHtml.Visibility = data.Html.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
@@ -158,10 +160,11 @@ namespace Reflection
             //}
             //TabRtf.Visibility = data.Rtf.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            //if (data.PngImageData != null)
-            //    using (MemoryStream stream = new MemoryStream(data.PngImageData))
-            //        DataImage.Source = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            //TabImage.Visibility = data.PngImageData != null ? Visibility.Visible : Visibility.Collapsed;
+            var bitmap = ((SnapshotBitmapData)data.Data.FirstOrDefault(f => f.Format == DataFormats.Bitmap))?.Data;
+            if (bitmap != null)
+                using (MemoryStream stream = new MemoryStream(bitmap))
+                    DataImage.Source = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            TabImage.Visibility = bitmap != null ? Visibility.Visible : Visibility.Collapsed;
 
 
             for (int i = 0; i < TabController.Items.Count; i++)

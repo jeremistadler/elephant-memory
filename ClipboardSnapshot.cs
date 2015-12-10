@@ -126,12 +126,8 @@ namespace Reflection
         [ProtoMember(1)]
         public DateTime Time { get; set; }
 
-        [ProtoMember(2)]
-        public string Text { get; set; }
-
         [ProtoMember(3)]
         public SnapshotDataBase[] Data { get; set; }
-
 
 
         public static ClipboardSnapshot CreateEmptySnapshot(DateTime time)
@@ -160,30 +156,36 @@ namespace Reflection
 
                 clip.Data = convertableFormats.Select<string, SnapshotDataBase>(f =>
                 {
-                    var isConverted = exactFormats.Contains(f);
-                    var obj = data.GetData(f, true);
+                    try
+                    {
+                        var isConverted = exactFormats.Contains(f);
+                        var obj = data.GetData(f, true);
 
-                    if (obj is string) return new SnapshotStringData { Format = f, Data = (string)obj, IsConverted = isConverted };
-                    if (obj is string[]) return new SnapshotStringArrayData { Format = f, Data = (string[])obj, IsConverted = isConverted };
-                    if (obj is bool) return new SnapshotBoolData { Format = f, Data = (bool)obj, IsConverted = isConverted };
-                    if (obj is InteropBitmap)
-                    {
-                        var pngStream = new MemoryStream();
-                        var encoder = new PngBitmapEncoder();
-                        encoder.Frames.Add(BitmapFrame.Create(obj as InteropBitmap));
-                        encoder.Save(pngStream);
-                        return new SnapshotBitmapData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
+                        if (obj is string) return new SnapshotStringData { Format = f, Data = (string)obj, IsConverted = isConverted };
+                        if (obj is string[]) return new SnapshotStringArrayData { Format = f, Data = (string[])obj, IsConverted = isConverted };
+                        if (obj is bool) return new SnapshotBoolData { Format = f, Data = (bool)obj, IsConverted = isConverted };
+                        if (obj is InteropBitmap)
+                        {
+                            var pngStream = new MemoryStream();
+                            var encoder = new PngBitmapEncoder();
+                            encoder.Frames.Add(BitmapFrame.Create(obj as InteropBitmap));
+                            encoder.Save(pngStream);
+                            return new SnapshotBitmapData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
+                        }
+                        if (obj is System.Drawing.Bitmap)
+                        {
+                            var bitmap = (System.Drawing.Bitmap)obj;
+                            var pngStream = new MemoryStream();
+                            bitmap.Save(pngStream, bitmap.RawFormat);
+                            return new SnapshotBitmapDrawingData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
+                        }
+                        if (obj is MemoryStream) {
+                            var d = ((MemoryStream)obj).ToArray();
+                            return new SnapshotRawData { Format = f, Data = d, IsConverted = isConverted };
+                        }
                     }
-                    if (obj is System.Drawing.Bitmap)
+                    catch (Exception ex)
                     {
-                        var bitmap = (System.Drawing.Bitmap)obj;
-                        var pngStream = new MemoryStream();
-                        bitmap.Save(pngStream, bitmap.RawFormat);
-                        return new SnapshotBitmapDrawingData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
-                    }
-                    if (obj is MemoryStream) {
-                        var d = ((MemoryStream)obj).ToArray();
-                        return new SnapshotRawData { Format = f, Data = d, IsConverted = isConverted };
                     }
 
                     return null;
@@ -296,14 +298,12 @@ namespace Reflection
 
         public bool EqualsExceptTime(ClipboardSnapshot other)
         {
-            return Text == other.Text && Data.ArraysEquals(other.Data);
+            return Data.ArraysEquals(other.Data);
         }
 
         public override string ToString()
         {
             string type = "Type: ";
-            if (!string.IsNullOrEmpty(Text)) type += "Text, ";
-
             type = type.Remove(type.Length - 2, 2);
 
             return (type + Environment.NewLine + "Time: " + Time.ToLongDateString() + " " + Time.ToLongTimeString() + Environment.NewLine/* + HtmlInfo*/).Trim();
