@@ -46,7 +46,10 @@ namespace Reflection
             UpdateUI(snapshot);
 
             if (!Cache.Any(f => f.EqualsExceptTime(snapshot)))
+            {
                 Storage.Save(snapshot);
+                Cache.Add(snapshot);
+            }
         }
 
         private void ShortcutManager_ToggleVisibility(bool visible)
@@ -141,24 +144,24 @@ namespace Reflection
             if (data.Text.NotEmpty()) DataText.Text = data.Text;
             TabText.Visibility = data.Text.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            if (data.Files.NotEmpty()) DataFiles.Text = string.Join(Environment.NewLine, data.Files);
-            TabFiles.Visibility = data.Files.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+            //if (data.Files.NotEmpty()) DataFiles.Text = string.Join(Environment.NewLine, data.Files);
+            //TabFiles.Visibility = data.Files.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            if (data.Html.NotEmpty()) DataHtml.Text = data.FormatHtml();
-            TabHtml.Visibility = data.Html.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+            //if (data.Html.NotEmpty()) DataHtml.Text = data.FormatHtml();
+            //TabHtml.Visibility = data.Html.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            if (data.Rtf.NotEmpty())
-            {
-                DataRtf.SelectAll();
-                using (var stream = new MemoryStream(Encoding.Default.GetBytes(data.Rtf)))
-                    DataRtf.Selection.Load(stream, DataFormats.Rtf);
-            }
-            TabRtf.Visibility = data.Rtf.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
+            //if (data.Rtf.NotEmpty())
+            //{
+            //    DataRtf.SelectAll();
+            //    using (var stream = new MemoryStream(Encoding.Default.GetBytes(data.Rtf)))
+            //        DataRtf.Selection.Load(stream, DataFormats.Rtf);
+            //}
+            //TabRtf.Visibility = data.Rtf.NotEmpty() ? Visibility.Visible : Visibility.Collapsed;
 
-            if (data.PngImageData != null)
-                using (MemoryStream stream = new MemoryStream(data.PngImageData))
-                    DataImage.Source = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            TabImage.Visibility = data.PngImageData != null ? Visibility.Visible : Visibility.Collapsed;
+            //if (data.PngImageData != null)
+            //    using (MemoryStream stream = new MemoryStream(data.PngImageData))
+            //        DataImage.Source = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            //TabImage.Visibility = data.PngImageData != null ? Visibility.Visible : Visibility.Collapsed;
 
 
             for (int i = 0; i < TabController.Items.Count; i++)

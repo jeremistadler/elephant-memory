@@ -2,8 +2,10 @@
 using ProtoBuf;
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
 namespace Reflection
@@ -12,51 +14,110 @@ namespace Reflection
     {
         string GetBlobStoragePath();
         DateTime GetTime();
-        int Id { get; set; }
     }
 
     public class ClipboardSnapshotPointer : TableEntity, ISnapshotPointer
     {
         public ClipboardSnapshotPointer() { }
-        public ClipboardSnapshotPointer(string partitionKey, DateTime time, int id)
+        public ClipboardSnapshotPointer(string partitionKey, DateTime time)
         {
             PartitionKey = partitionKey;
-            RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0');
-            Id = id;
+            RowKey = time.FormatAsRowKey();
         }
 
-        public int Id { get; set; }
-        public string GetBlobStoragePath() => PartitionKey + "/" + RowKey;
-        public DateTime GetTime() => new DateTime(long.Parse(RowKey.TrimStart('0')), DateTimeKind.Utc);
+        public string GetBlobStoragePath() => PartitionKey + "/" + RowKey.FormatTicksAsDatetime().Ticks;
+        public DateTime GetTime() => RowKey.FormatTicksAsDatetime();
     }
-
-    //public class ClipboardSnapshotPointer : TableEntity, ISnapshotPointer
-    //{
-    //    public ClipboardSnapshotPointer() { }
-    //    public ClipboardSnapshotPointer(string partitionKey, DateTime time, int id)
-    //    {
-    //        PartitionKey = partitionKey;
-    //        RowKey = time.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffff");
-    //    }
-
-    //    public DateTime Time { get; set; }
-    //    public string GetBlobStoragePath() => PartitionKey + "/" + Time.ToUniversalTime().Ticks;
-    //}
 
     public class ClipboardSnapshotPointerReverse : TableEntity, ISnapshotPointer
     {
         public ClipboardSnapshotPointerReverse() { }
-        public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time, int id)
+        public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time)
         {
             PartitionKey = partitionKey + "-reversed";
-            RowKey = time.ToUniversalTime().Ticks.ToString().PadLeft(20, '0').NumberReverse();
-            Id = id;
+            RowKey = time.FormatAsRowKeyReverse();
         }
 
-        public int Id { get; set; }
-        public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.NumberReverse();
-        public DateTime GetTime() => new DateTime(long.Parse(RowKey.NumberReverse().TrimStart('0')), DateTimeKind.Utc);
+        public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.FormatTicksAsDatetimeReversed().Ticks;
+        public DateTime GetTime() => RowKey.FormatTicksAsDatetimeReversed();
     }
+
+    [ProtoContract]
+    [ProtoInclude(10, typeof(SnapshotStringData))]
+    [ProtoInclude(20, typeof(SnapshotStringArrayData))]
+    [ProtoInclude(30, typeof(SnapshotRawData))]
+    [ProtoInclude(40, typeof(SnapshotBoolData))]
+    [ProtoInclude(50, typeof(SnapshotBitmapData))]
+    [ProtoInclude(60, typeof(SnapshotBitmapDrawingData))]
+    public abstract class SnapshotDataBase
+    {
+        [ProtoMember(1)]
+        public string Format { get; set; }
+        [ProtoMember(2)]
+        public bool IsConverted { get; set; }
+
+        public abstract object GetData();
+    }
+
+    [ProtoContract]
+    public class SnapshotStringData : SnapshotDataBase
+    {
+        [ProtoMember(11)]
+        public string Data { get; set; }
+
+        public override object GetData() => Data;
+    }
+
+    [ProtoContract]
+    public class SnapshotStringArrayData : SnapshotDataBase
+    {
+        [ProtoMember(21)]
+        public string[] Data { get; set; }
+        public override object GetData() => Data;
+    }
+
+    [ProtoContract]
+    public class SnapshotRawData : SnapshotDataBase
+    {
+        [ProtoMember(31)]
+        public byte[] Data { get; set; }
+        public override object GetData() => Data;
+    }
+
+    [ProtoContract]
+    public class SnapshotBoolData : SnapshotDataBase
+    {
+        [ProtoMember(41)]
+        public bool Data { get; set; }
+        public override object GetData() => Data;
+    }
+
+    [ProtoContract]
+    public class SnapshotBitmapData : SnapshotDataBase
+    {
+        [ProtoMember(51)]
+        public byte[] Data { get; set; }
+        public override object GetData() {
+            using (MemoryStream stream = new MemoryStream(Data))
+            {
+                BitmapImage bi = new BitmapImage();
+                bi.BeginInit();
+                bi.CacheOption = BitmapCacheOption.OnLoad;
+                bi.StreamSource = stream;
+                bi.EndInit();
+                return bi;
+            }
+        }
+    }
+
+    [ProtoContract]
+    public class SnapshotBitmapDrawingData : SnapshotDataBase
+    {
+        [ProtoMember(61)]
+        public byte[] Data { get; set; }
+        public override object GetData() => new System.Drawing.Bitmap(new MemoryStream(Data));
+    }
+
 
 
     [ProtoContract]
@@ -64,66 +125,69 @@ namespace Reflection
     {
         [ProtoMember(1)]
         public DateTime Time { get; set; }
-        [ProtoMember(2)]
-        public string Rtf { get; set; }
-        [ProtoMember(3)]
-        public string Text { get; set; }
-        [ProtoMember(4)]
-        public string Html { get; set; }
-        [ProtoMember(5)]
-        public string[] Files { get; set; }
-        [ProtoMember(6)]
-        public byte[] PngImageData { get; set; }
 
-        [ProtoMember(7)]
-        public string[] ExactFormats { get; set; }
-        [ProtoMember(8)]
-        public string[] ConvertableFormats { get; set; }
+        [ProtoMember(2)]
+        public string Text { get; set; }
+
+        [ProtoMember(3)]
+        public SnapshotDataBase[] Data { get; set; }
+
+
 
         public static ClipboardSnapshot CreateEmptySnapshot(DateTime time)
         {
             return new ClipboardSnapshot
             {
                 Time = time,
-                ConvertableFormats = new string[0],
-                ExactFormats = new string[0],
+                Data = new SnapshotDataBase[0],
             };
         }
 
-        public static ClipboardSnapshot CreateSnapshot(IDataObject data)
+        public static ClipboardSnapshot TryCreateSnapshot(IDataObject data)
         {
             try
             {
+                var exactFormats = data.GetFormats(false);
+                var convertableFormats = data.GetFormats(true);
+
+                if (exactFormats.Contains("reflectionid"))
+                    return null;
+
                 var clip = new ClipboardSnapshot { 
-                    Time = DateTime.Now,
-                    ConvertableFormats = data.GetFormats(true),
-                    ExactFormats = data.GetFormats(false),
+                    Time = DateTime.Now
                 };
 
-                if (clip.ConvertableFormats.Contains(DataFormats.Bitmap))
+
+                clip.Data = convertableFormats.Select<string, SnapshotDataBase>(f =>
                 {
-                    var image = data.GetData(DataFormats.Bitmap, true) as System.Windows.Interop.InteropBitmap;
+                    var isConverted = exactFormats.Contains(f);
+                    var obj = data.GetData(f, true);
 
-                    using (var pngStream = new MemoryStream())
+                    if (obj is string) return new SnapshotStringData { Format = f, Data = (string)obj, IsConverted = isConverted };
+                    if (obj is string[]) return new SnapshotStringArrayData { Format = f, Data = (string[])obj, IsConverted = isConverted };
+                    if (obj is bool) return new SnapshotBoolData { Format = f, Data = (bool)obj, IsConverted = isConverted };
+                    if (obj is InteropBitmap)
                     {
+                        var pngStream = new MemoryStream();
                         var encoder = new PngBitmapEncoder();
-                        encoder.Frames.Add(BitmapFrame.Create(image));
+                        encoder.Frames.Add(BitmapFrame.Create(obj as InteropBitmap));
                         encoder.Save(pngStream);
-                        clip.PngImageData = pngStream.ToArray();
+                        return new SnapshotBitmapData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
                     }
-                }
+                    if (obj is System.Drawing.Bitmap)
+                    {
+                        var bitmap = (System.Drawing.Bitmap)obj;
+                        var pngStream = new MemoryStream();
+                        bitmap.Save(pngStream, bitmap.RawFormat);
+                        return new SnapshotBitmapDrawingData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
+                    }
+                    if (obj is MemoryStream) {
+                        var d = ((MemoryStream)obj).ToArray();
+                        return new SnapshotRawData { Format = f, Data = d, IsConverted = isConverted };
+                    }
 
-                if (clip.ExactFormats.Contains(DataFormats.UnicodeText))
-                    clip.Text = (string)data.GetData(DataFormats.UnicodeText, false);
-
-                if (clip.ExactFormats.Contains(DataFormats.Rtf))
-                    clip.Rtf = (string)data.GetData(DataFormats.Rtf, false);
-
-                if (clip.ExactFormats.Contains(DataFormats.Html))
-                    clip.Html = (string)data.GetData(DataFormats.Html, false);
-
-                if (clip.ExactFormats.Contains(DataFormats.FileDrop))
-                    clip.Files = (string[])data.GetData(DataFormats.FileDrop, false);
+                    return null;
+                }).ToArray();
 
                 return clip;
             }
@@ -133,39 +197,23 @@ namespace Reflection
                 //return null;
             }
         }
-
+        
         public void SetToClipboard()
         {
-            if (!ConvertableFormats.Any())
+            if (Data == null || !Data.Any())
             {
                 System.Diagnostics.Debug.WriteLine("Could not set empty clipboard: " + Time.ToString("HH:mm:ss"));
                 return;
             }
 
             var data = new DataObject();
-
-            if (ConvertableFormats.Contains(DataFormats.FileDrop))
-                data.SetData(DataFormats.FileDrop, Files);
-
-            if (ConvertableFormats.Contains(DataFormats.Html))
-                data.SetData(DataFormats.Html, Html);
-
-            if (ConvertableFormats.Contains(DataFormats.UnicodeText))
-                data.SetData(DataFormats.UnicodeText, Text);
-
-            if (ConvertableFormats.Contains(DataFormats.Bitmap))
+            foreach (var item in Data)
             {
-                using (MemoryStream stream = new MemoryStream(PngImageData))
-                {
-                    BitmapImage bi = new BitmapImage();
-                    bi.BeginInit();
-                    bi.CacheOption = BitmapCacheOption.OnLoad;
-                    bi.StreamSource = stream;
-                    bi.EndInit();
-                    data.SetImage(bi);
-                }
+                if (!item.IsConverted)
+                    data.SetData(item.Format, item.GetData());
             }
 
+            data.SetData("reflectionid", Time.Ticks);
             System.Diagnostics.Debug.WriteLine("Clipboard set to " + Time.ToString("HH:mm:ss"));
             Clipboard.SetDataObject(data, true);
         }
@@ -173,15 +221,17 @@ namespace Reflection
         public Stream Serialize()
         {
             var stream = new MemoryStream();
-            Serializer.Serialize(stream, this);
+            using (var zipStream = new DeflateStream(stream, CompressionMode.Compress, true))
+            using (var bs = new BufferedStream(zipStream, 64 * 1024))
+                Serializer.Serialize(bs, this);
             stream.Position = 0;
             return stream;
         }
 
         public static ClipboardSnapshot Deserialize(Stream stream) =>
-            Serializer.Deserialize<ClipboardSnapshot>(stream);
+            Serializer.Deserialize<ClipboardSnapshot>(new DeflateStream(stream, CompressionMode.Decompress, false));
 
-        string ExtractHtmlInfo()
+        string ExtractHtmlInfo(string Html)
         {
             string ContentStart = "<!--StartFragment-->";
             string ContentEnd = "<!--EndFragment-->";
@@ -221,13 +271,12 @@ namespace Reflection
             return result;
         }
 
-        public string FormatHtml()
+        public string FormatHtml(string Html)
         {
             string ContentStart = "<!--StartFragment-->";
             string ContentEnd = "<!--EndFragment-->";
 
             string UrlEnd = Environment.NewLine;
-
 
             int contentStartIndex = Html.IndexOf(ContentStart);
             int contentEndIndex = Html.IndexOf(ContentEnd, contentStartIndex);
@@ -247,24 +296,13 @@ namespace Reflection
 
         public bool EqualsExceptTime(ClipboardSnapshot other)
         {
-            return Text == other.Text &&
-                   Html == other.Html &&
-                   Rtf == other.Rtf &&
-
-                  Files.ArraysEquals(other.Files) &&
-                  PngImageData.ArraysEquals(other.PngImageData) &&
-                  ConvertableFormats.ArraysEquals(other.ConvertableFormats) &&
-                  ExactFormats.ArraysEquals(other.ExactFormats);
+            return Text == other.Text && Data.ArraysEquals(other.Data);
         }
 
         public override string ToString()
         {
             string type = "Type: ";
             if (!string.IsNullOrEmpty(Text)) type += "Text, ";
-            if (PngImageData != null) type += "Image, ";
-            if (Files.NotEmpty()) type += "Files, ";
-            if (string.IsNullOrWhiteSpace(Html)) type += "Html, ";
-            if (string.IsNullOrWhiteSpace(Rtf)) type += "Rtf, ";
 
             type = type.Remove(type.Length - 2, 2);
 

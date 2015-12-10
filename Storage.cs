@@ -37,13 +37,10 @@ namespace Reflection
             Table.CreateIfNotExists();
         }
 
-        public static int IdGen = 0;
-
         public async Task Save(ClipboardSnapshot snapshot)
         {
-            var pointer = new ClipboardSnapshotPointer(partitionKey, snapshot.Time, IdGen);
-            var reversePointer = new ClipboardSnapshotPointerReverse(partitionKey, snapshot.Time, IdGen);
-            IdGen++;
+            var pointer = new ClipboardSnapshotPointer(partitionKey, snapshot.Time);
+            var reversePointer = new ClipboardSnapshotPointerReverse(partitionKey, snapshot.Time);
 
             var path1 = pointer.GetBlobStoragePath();
             var path2 = reversePointer.GetBlobStoragePath();
@@ -63,8 +60,8 @@ namespace Reflection
             await Table.ExecuteAsync(insertOperation);
         }
 
-        public Task<ClipboardSnapshot> GetNext(DateTime value) => GetNeighbour(new ClipboardSnapshotPointer(partitionKey, value, 0));
-        public Task<ClipboardSnapshot> GetPrevious(DateTime value) => GetNeighbour(new ClipboardSnapshotPointerReverse(partitionKey, value, 0));
+        public Task<ClipboardSnapshot> GetNext(DateTime value) => GetNeighbour(new ClipboardSnapshotPointer(partitionKey, value));
+        public Task<ClipboardSnapshot> GetPrevious(DateTime value) => GetNeighbour(new ClipboardSnapshotPointerReverse(partitionKey, value));
 
         async Task<ClipboardSnapshot> GetNeighbour<T>(T pointer) where T : TableEntity, ISnapshotPointer, new()
         {
@@ -82,7 +79,7 @@ namespace Reflection
             if (targetPointer == null)
                 return null;
 
-            System.Diagnostics.Debug.WriteLine("From " + pointer.Id + " clipboard snapshot: " + targetPointer.Id);
+            System.Diagnostics.Debug.WriteLine("From " + pointer.GetTime().ToString("HH:mm:ss") + " clipboard snapshot: " + targetPointer.GetTime().ToString("HH:mm:ss"));
 
             var blob = BlobContainer.GetBlockBlobReference(targetPointer.GetBlobStoragePath());
 

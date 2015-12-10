@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Interop;
 
@@ -11,7 +12,6 @@ namespace Reflection
         static IntPtr NextClipboardViewer;
 
         static IDataObject LastClipData;
-        static ClipboardSnapshot LastClip;
 
         public static bool Start(Action<ClipboardSnapshot> onChanged, HwndSource source)
         {
@@ -51,13 +51,12 @@ namespace Reflection
             if (LastClipData == null || !Clipboard.IsCurrent(LastClipData))
             {
                 LastClipData = Clipboard.GetDataObject();
-                var data = ClipboardSnapshot.CreateSnapshot(LastClipData);
 
-                if (LastClip != null && data.EqualsExceptTime(LastClip))
+                var snapshot = ClipboardSnapshot.TryCreateSnapshot(LastClipData);
+                if (snapshot == null)
                     return;
 
-                LastClip = data;
-                OnChanged(data);
+                OnChanged(snapshot);
             }
         }
     }
