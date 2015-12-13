@@ -13,7 +13,7 @@ namespace Reflection
 {
     public partial class MainWindow : MahApps.Metro.Controls.MetroWindow
     {
-        ClipboardSnapshot[] RelatedSnapshots;
+        ClipboardSnapshotPointer[] RelatedSnapshots;
         ClipboardSnapshot Current;
         IStorage Storage;
         bool IsLoading = false;
@@ -43,12 +43,15 @@ namespace Reflection
         {
             System.Diagnostics.Debug.WriteLine("Clipboard changed");
 
-            Current = snapshot;
-            UpdateUI(snapshot);
-
             if (snapshot.IsNew)
                 Storage.Save(snapshot);
+            else
+            {
+                snapshot = Current;
+            }
 
+            Current = snapshot;
+            UpdateUI(snapshot);
             UpdateRelatedSnapshots();
         }
 
@@ -78,7 +81,7 @@ namespace Reflection
 
         void UpdateRelatedSnapshots()
         {
-            var date = Current?.Time ?? DateTime.UtcNow;
+            var date = Current?.Date ?? DateTime.UtcNow;
             Storage.GetRelated(date, result =>
             {
                 RelatedSnapshots = result;
@@ -90,7 +93,7 @@ namespace Reflection
         {
             if (IsLoading) return; IsLoading = true;
 
-            var date = Current?.Time ?? DateTime.UtcNow;
+            var date = Current?.Date ?? DateTime.UtcNow;
             Storage.GetPrevious(date).ContinueWith(task =>
             {
                 IsLoading = false;
@@ -99,6 +102,8 @@ namespace Reflection
                     Current = task.Result;
                     UpdateUIAndSetToClipboardAsync();
                 }
+                else
+                    UpdateUIAsync();
 
                 UpdateRelatedSnapshots();
             });
@@ -109,7 +114,7 @@ namespace Reflection
             if (Current == null) return;
             if (IsLoading) return; IsLoading = true;
 
-            Storage.GetNext(Current.Time).ContinueWith(task =>
+            Storage.GetNext(Current.Date).ContinueWith(task =>
             {
                 IsLoading = false;
                 if (task.Result != null)
@@ -117,6 +122,8 @@ namespace Reflection
                     Current = task.Result;
                     UpdateUIAndSetToClipboardAsync();
                 }
+                else
+                    UpdateUIAsync();
 
                 UpdateRelatedSnapshots();
             });
@@ -152,11 +159,28 @@ namespace Reflection
 
         void UpdateUI(ClipboardSnapshot data)
         {
-            TimeText.Text = data.Time.ToLocalTime().ToString("HH:mm:ss") + "  (" + TimeToText(data.Time) + ")";
+            UpdateTimeline();
 
             DataText.Text = "";
             DataFiles.Text = "";
             DataHtml.Text = "";
+            DataRtf.Document.Blocks.Clear();
+
+            if (data == null || data.Data == null)
+            {
+                if (data != null)
+                    TimeText.Text = data.Date.ToLocalTime().ToString("HH:mm:ss") + "  (" + TimeToText(data.Date) + ")";
+
+                TabText.Visibility = Visibility.Collapsed;
+                TabFiles.Visibility = Visibility.Collapsed;
+                TabRtf.Visibility = Visibility.Collapsed;
+                TabImage.Visibility = Visibility.Collapsed;
+                TabHtml.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            TimeText.Text = data.Date.ToLocalTime().ToString("HH:mm:ss") + "  (" + TimeToText(data.Date) + ")";
+
 
             var text = (data.Data.FirstOrDefault(f => f.Format == DataFormats.Text) as SnapshotStringData)?.Data;
             if (text.NotEmpty()) DataText.Text = text;
@@ -195,71 +219,120 @@ namespace Reflection
                     break;
                 }
             }
+        }
 
+        private void UpdateTimeline()
+        {
             Timeline.Children.Clear();
 
             if (RelatedSnapshots != null && RelatedSnapshots.Any())
             {
+                var itemWidth = 8;
+                var ballSize = 6;
+                var positions = GetTimelinePositions(itemWidth);
+
+                var currentIndex = RelatedSnapshots.Select((a, i) => new { a, i }).FirstOrDefault(f => Current != null && f.a.GetId() == Current.Id)?.i ?? -1;
+
+                if (currentIndex >= 0)
+                {
+                    var shift = (Timeline.ActualWidth - 100) - positions[currentIndex];
+                    for (int i = 0; i < positions.Length; i++) positions[i] += shift;
+                }
+
                 for (int i = 0; i < RelatedSnapshots.Length; i++)
                 {
+                    var left = positions[i];
                     var item = RelatedSnapshots[i];
-                    double left = 0;
-                    if (i > 0)
+
+                    if (left < 0) continue;
+                    var top = 3;
+
+                    if (Current.Id == item.GetId())
+                        AddTimelineBox(-1, left, 2, itemWidth, Brushes.Gray, 0);
+
+                    if (item.GetFormats().Any(f => f == DataFormats.Rtf))
                     {
-                        var timeDiff = item.Time - RelatedSnapshots[i - 1].Time;
-                        var diff = Math.Log(timeDiff.TotalMinutes) * 10;
-                        left = i * 7 + Math.Min(50, Math.Max(0, diff));
+                        AddTimelineCircle(top, left + 1, ballSize, Brushes.CornflowerBlue, false);
+                        top += ballSize + 1;
                     }
 
+                    if (item.GetFormats().Any(f => f == DataFormats.Bitmap))
                     {
-                        var elm = new Border
-                        {
-                            CornerRadius = new CornerRadius(10),
-                            Background = Brushes.CornflowerBlue,
-                            Width = 5,
-                            Height = 5,
-                            BorderBrush = Brushes.Black
-                        };
-
-                        if (item.EqualsExceptTime(Current))
-                            elm.BorderThickness = new Thickness(1);
-
-                        Canvas.SetLeft(elm, left);
-                        Canvas.SetTop(elm, 0);
-                        Timeline.Children.Add(elm);
+                        AddTimelineCircle(top, left + 1, ballSize, Brushes.Purple, false);
+                        top += ballSize + 1;
                     }
 
-                    if (item.Data.Any(f => f.Format == DataFormats.Bitmap))
+                    if (item.GetFormats().Any(f => f == DataFormats.Html))
                     {
-                        var elm2 = new Border
-                        {
-                            CornerRadius = new CornerRadius(10),
-                            Background = Brushes.Pink,
-                            Width = 3,
-                            Height = 3
-                        };
-
-                        Canvas.SetLeft(elm2, left);
-                        Canvas.SetTop(elm2, 5);
-                        Timeline.Children.Add(elm2);
+                        AddTimelineCircle(top, left + 1, ballSize, Brushes.Brown, false);
+                        top += ballSize + 1;
                     }
 
-                    if (item.Data.Any(f => f.Format == DataFormats.Html))
+                    if (item.GetFormats().Any(f => f == DataFormats.FileDrop))
                     {
-                        var elm2 = new Border
-                        {
-                            CornerRadius = new CornerRadius(10),
-                            Background = Brushes.Brown,
-                            Width = 3,
-                            Height = 3
-                        };
-
-                        Canvas.SetLeft(elm2, left);
-                        Canvas.SetTop(elm2, 8);
-                        Timeline.Children.Add(elm2);
+                        AddTimelineCircle(top, left + 1, ballSize, Brushes.DarkRed, false);
+                        top += ballSize + 1;
                     }
+
+                    if (top == 3)
+                        AddTimelineCircle(top, left, 5, Brushes.White, true);
                 }
             }
+        }
+
+        double[] GetTimelinePositions(int itemWidth)
+        {
+            var positions = new double[RelatedSnapshots.Length];
+
+            var left = 0.0;
+            for (int i = RelatedSnapshots.Length - 1; i >= 0; i--)
+            {
+                left += itemWidth;
+                if (i < positions.Length - 1)
+                {
+                    var timeDiff = RelatedSnapshots[i + 1].Date - RelatedSnapshots[i].Date;
+                    var diff = Math.Log(timeDiff.TotalMinutes) * 10;
+                    if (diff > 0)
+                        left += Math.Min(30, diff);
+                }
+                positions[i] = left;
+            }
+
+            for (int i = 0; i < positions.Length; i++) positions[i] = left - positions[i];
+
+            return positions;
+        }
+
+        private void AddTimelineCircle(double top, double left, double size, Brush color, bool stroke)
+        {
+            var elm = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Background = color,
+                Width = size,
+                Height = size,
+                BorderBrush = Brushes.Black,
+                BorderThickness = stroke ? new Thickness(1) : new Thickness()
+            };
+
+            Canvas.SetLeft(elm, left);
+            Canvas.SetTop(elm, top);
+            Timeline.Children.Add(elm);
+        }
+
+        private void AddTimelineBox(double top, double left, double height, double width, Brush color, double borderRadius)
+        {
+            var elm = new Border
+            {
+                CornerRadius = new CornerRadius(borderRadius),
+                Background = color,
+                Width = width,
+                Height = height,
+            };
+
+            Canvas.SetLeft(elm, left);
+            Canvas.SetTop(elm, top);
+            Timeline.Children.Add(elm);
         }
 
         bool isFirst = true;

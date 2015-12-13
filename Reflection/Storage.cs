@@ -2,6 +2,7 @@
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,18 +15,21 @@ namespace Reflection
         Task<ClipboardSnapshot> GetNext(DateTime value);
         Task<ClipboardSnapshot> GetPrevious(DateTime value);
         Task Save(ClipboardSnapshot snapshot);
-        Task GetRelated(DateTime date, Action<ClipboardSnapshot[]> onChanged);
+        Task GetRelated(DateTime date, Action<ClipboardSnapshotPointer[]> onChanged);
     }
 
     public class TableClipStorage : IStorage
     {
         CloudTable Table;
         CloudBlobContainer BlobContainer;
-        string partitionKey;
+        string basePartitonKey;
+
+        SortedSet<ClipboardSnapshotPointer> KnownPointers = new SortedSet<ClipboardSnapshotPointer>();
+        ConcurrentDictionary<ClipboardSnapshotPointer, ClipboardSnapshot> Cache = new ConcurrentDictionary<ClipboardSnapshotPointer, ClipboardSnapshot>();
 
         public TableClipStorage()
         {
-            partitionKey = ConfigReader.Read<string>("azureStorage.partition");
+            basePartitonKey = ConfigReader.Read<string>("azureStorage.partition");
             var container = ConfigReader.Read<string>("azureStorage.container");
             var connectionString = ConfigReader.Read<string>("azureStorage.connectionString");
             var storageAccount = CloudStorageAccount.Parse(connectionString);
@@ -37,99 +41,99 @@ namespace Reflection
             var tableClient = storageAccount.CreateCloudTableClient();
             Table = tableClient.GetTableReference(container);
             Table.CreateIfNotExists();
+
+            LoadDay(DateTime.Now);
+            LoadDay(DateTime.Now.AddDays(-1));
+            LoadDay(DateTime.Now.AddDays(1));
         }
+
+        string GetPartitionKey(DateTime date) => basePartitonKey + "-" + date.ToUniversalTime().ToString("yyyyMMdd");
 
         public async Task Save(ClipboardSnapshot snapshot)
         {
-            var pointer = new ClipboardSnapshotPointer(partitionKey, snapshot.Time);
-            var reversePointer = new ClipboardSnapshotPointerReverse(partitionKey, snapshot.Time);
+            var pointer = new ClipboardSnapshotPointer(GetPartitionKey(snapshot.Date), snapshot.Date, snapshot.Data.Select(f => f.Format).ToArray());
+            snapshot.Id = pointer.GetId();
+            KnownPointers.Add(pointer);
+            Cache[pointer] = snapshot;
 
-            var path1 = pointer.GetBlobStoragePath();
-            var path2 = reversePointer.GetBlobStoragePath();
-
-            var t1 = pointer.GetTime();
-            var t2 = reversePointer.GetTime();
-
-
-
-            var blob = BlobContainer.GetBlockBlobReference(pointer.GetBlobStoragePath());
+            var blob = BlobContainer.GetBlockBlobReference(pointer.GetId());
             await blob.UploadFromStreamAsync(snapshot.Serialize());
 
             var insertOperation = TableOperation.Insert(pointer);
             var result = await Table.ExecuteAsync(insertOperation);
-
-            insertOperation = TableOperation.Insert(reversePointer);
-            await Table.ExecuteAsync(insertOperation);
         }
 
-        public Task<ClipboardSnapshot> GetNext(DateTime value) => GetNeighbour(new ClipboardSnapshotPointer(partitionKey, value));
-        public Task<ClipboardSnapshot> GetPrevious(DateTime value) => GetNeighbour(new ClipboardSnapshotPointerReverse(partitionKey, value));
-
-        async Task<ClipboardSnapshot> GetNeighbour<T>(T pointer) where T : TableEntity, ISnapshotPointer, new()
+        public async Task<ClipboardSnapshot> GetNext(DateTime time)
         {
-            var reverse = pointer is ClipboardSnapshotPointerReverse;
-
-            var rangeQuery = new TableQuery<T>().Where(
-                TableQuery.CombineFilters(
-                    TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, pointer.PartitionKey),
-                    TableOperators.And,
-                    TableQuery.GenerateFilterCondition("RowKey", QueryComparisons.GreaterThan, pointer.RowKey)));
-
-            var result = await Table.ExecuteQuerySegmentedAsync(rangeQuery.Take(1), new TableContinuationToken());
-            var targetPointer = result.FirstOrDefault();
+            var targetPointer = KnownPointers.OrderBy(f => f.Date).FirstOrDefault(f => f.Date > time);
 
             if (targetPointer == null)
                 return null;
 
+            return await GetSnapshot(targetPointer);
+        }
 
-            var blob = BlobContainer.GetBlockBlobReference(targetPointer.GetBlobStoragePath());
+        public async Task<ClipboardSnapshot> GetPrevious(DateTime time)
+        {
+            var targetPointer = KnownPointers.OrderByDescending(f => f.Date).FirstOrDefault(f => f.Date < time);
+
+            if (targetPointer == null)
+                return null;
+
+            return await GetSnapshot(targetPointer);
+        }
+
+        async Task LoadDay(DateTime time)
+        {
+            var rangeQuery = new TableQuery<ClipboardSnapshotPointer>().Where(
+                TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, GetPartitionKey(time)));
+
+            var result = await Table.ExecuteQuerySegmentedAsync(rangeQuery, new TableContinuationToken());
+
+            foreach (var item in result)
+            {
+                lock (KnownPointers)
+                {
+                    KnownPointers.Add(item);
+                }
+            }
+        }
+
+        async Task<ClipboardSnapshot> GetSnapshot(ClipboardSnapshotPointer pointer)
+        {
+            ClipboardSnapshot snapshot;
+            if (Cache.TryGetValue(pointer, out snapshot))
+                return snapshot;
+
+            var blob = BlobContainer.GetBlockBlobReference(pointer.GetId());
 
             var data = new MemoryStream();
             await blob.DownloadToStreamAsync(data);
             if (data.Length == 0)
-                return ClipboardSnapshot.CreateEmptySnapshot(targetPointer.GetTime());
+                return ClipboardSnapshot.CreateEmptySnapshot(pointer.Date, pointer.GetId());
 
             data.Position = 0;
-            return ClipboardSnapshot.Deserialize(data);
+            snapshot = ClipboardSnapshot.Deserialize(data);
+            snapshot.Id = pointer.GetId();
+            Cache[pointer] = snapshot;
+            return snapshot;
         }
 
         static bool IsFetchingRelated = false;
-        public async Task GetRelated(DateTime startDate, Action<ClipboardSnapshot[]> onChanged)
+        public async Task GetRelated(DateTime startDate, Action<ClipboardSnapshotPointer[]> onChanged)
         {
             if (IsFetchingRelated) return;
             IsFetchingRelated = true;
 
-            var list = new LinkedList<ClipboardSnapshot>();
-            var currentDate = startDate;
+            Action<Task> updateView = task => onChanged(KnownPointers.ToArray());
 
-            for (int i = 0; i < 10; i++)
-            {
-                var item = await GetPrevious(currentDate);
-                if (item == null) break;
+            await Task.WhenAll(new[] {
+                LoadDay(startDate.AddDays(0)).ContinueWith(updateView),
+                LoadDay(startDate.AddDays(-1)).ContinueWith(updateView),
+                LoadDay(startDate.AddDays(1)).ContinueWith(updateView)
+            });
 
-                if (list.Any() && list.Min(f => f.Time) < item.Time)
-                    System.Diagnostics.Debugger.Break();
-
-                list.AddFirst(item);
-                currentDate = item.Time;
-                onChanged(list.ToArray());
-            }
-
-            currentDate = startDate;
-            for (int i = 0; i < 10; i++)
-            {
-                var item = await GetNext(currentDate);
-                if (item == null) break;
-
-                if (list.Any() && list.Max(f => f.Time) > item.Time)
-                    System.Diagnostics.Debugger.Break();
-
-                list.AddLast(item);
-                currentDate = item.Time;
-                onChanged(list.ToArray());
-            }
-
-            IsFetchingRelated = false;
+            //IsFetchingRelated = false;
         }
     }
 }

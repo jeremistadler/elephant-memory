@@ -1,4 +1,5 @@
 ﻿using Microsoft.WindowsAzure.Storage.Table;
+using Newtonsoft.Json;
 using ProtoBuf;
 using System;
 using System.IO;
@@ -10,37 +11,39 @@ using System.Windows.Media.Imaging;
 
 namespace Reflection
 {
-    public interface ISnapshotPointer
-    {
-        string GetBlobStoragePath();
-        DateTime GetTime();
-    }
-
-    public class ClipboardSnapshotPointer : TableEntity, ISnapshotPointer
+    public class ClipboardSnapshotPointer : TableEntity, IComparable
     {
         public ClipboardSnapshotPointer() { }
-        public ClipboardSnapshotPointer(string partitionKey, DateTime time)
+        public ClipboardSnapshotPointer(string partitionKey, DateTime date, string[] formats)
         {
             PartitionKey = partitionKey;
-            RowKey = time.FormatAsRowKey();
+            RowKey = date.FormatAsRowKey();
+            EncodedFormats = JsonConvert.SerializeObject(formats);
+            Date = date;
         }
 
-        public string GetBlobStoragePath() => PartitionKey + "/" + RowKey.FormatTicksAsDatetime().Ticks;
-        public DateTime GetTime() => RowKey.FormatTicksAsDatetime();
-    }
+        public string EncodedFormats { get; set; }
+        public DateTime Date { get; set; }
 
-    public class ClipboardSnapshotPointerReverse : TableEntity, ISnapshotPointer
-    {
-        public ClipboardSnapshotPointerReverse() { }
-        public ClipboardSnapshotPointerReverse(string partitionKey, DateTime time)
+        public string GetId() => PartitionKey + "/" + RowKey;
+        public string[] GetFormats() => JsonConvert.DeserializeObject<string[]>(EncodedFormats ?? "") ?? new string[0];
+
+        public override int GetHashCode() => PartitionKey.GetHashCode() + RowKey.GetHashCode() * 37;
+        public override bool Equals(object obj)
         {
-            PartitionKey = partitionKey + "-reversed";
-            RowKey = time.FormatAsRowKeyReverse();
+            var ent = obj as ClipboardSnapshotPointer;
+            if (ent == null) return false;
+            return ent.PartitionKey == PartitionKey && ent.RowKey == RowKey;
         }
 
-        public string GetBlobStoragePath() => PartitionKey.Replace("-reversed", "") + "/" + RowKey.FormatTicksAsDatetimeReversed().Ticks;
-        public DateTime GetTime() => RowKey.FormatTicksAsDatetimeReversed();
+        public int CompareTo(object obj)
+        {
+            var ent = obj as ClipboardSnapshotPointer;
+            if (ent == null) return -1;
+            return Date.CompareTo(ent.Date);
+        }
     }
+
 
     [ProtoContract]
     [ProtoInclude(10, typeof(SnapshotStringData))]
@@ -159,21 +162,24 @@ namespace Reflection
     public class ClipboardSnapshot
     {
         [ProtoMember(1)]
-        public DateTime Time { get; set; }
+        public DateTime Date { get; set; }
 
         [ProtoMember(3)]
         public SnapshotDataBase[] Data { get; set; }
+
+        public string Id { get; set; }
 
 
         const string InternalFormat = "reflectionid";
         public bool IsNew => !Data.Any(f => f.Format == InternalFormat);
 
-        public static ClipboardSnapshot CreateEmptySnapshot(DateTime time)
+        public static ClipboardSnapshot CreateEmptySnapshot(DateTime time, string id)
         {
             return new ClipboardSnapshot
             {
-                Time = time,
+                Date = time,
                 Data = new SnapshotDataBase[0],
+                Id = id,
             };
         }
 
@@ -181,7 +187,7 @@ namespace Reflection
         {
             try
             {
-                var data = clipboard.GetData(format, true);
+                var data = clipboard.GetData(format, false);
 
                 if (data is string) return new SnapshotStringData { Format = format, Data = (string)data, IsConverted = isConverted };
                 if (data is string[]) return new SnapshotStringArrayData { Format = format, Data = (string[])data, IsConverted = isConverted };
@@ -224,10 +230,13 @@ namespace Reflection
                 var convertableFormats = data.GetFormats(true);
 
                 var clip = new ClipboardSnapshot { 
-                    Time = DateTime.UtcNow
+                    Date = DateTime.UtcNow
                 };
 
                 clip.Data = convertableFormats.Select(f => ClipboardDataToSnapshot(data, f, exactFormats.Contains(f))).ToArray();
+                if (!clip.IsNew)
+                    clip.Id = clip.Data.Where(f => f.Format == InternalFormat).Cast<SnapshotStringData>().First().Data;
+
                 return clip;
             }
             catch (Exception)
@@ -241,7 +250,7 @@ namespace Reflection
         {
             if (Data == null || !Data.Any())
             {
-                System.Diagnostics.Debug.WriteLine("Could not set empty clipboard: " + Time.ToString("HH:mm:ss"));
+                System.Diagnostics.Debug.WriteLine("Could not set empty clipboard: " + Date.ToString("HH:mm:ss"));
                 return;
             }
 
@@ -249,12 +258,16 @@ namespace Reflection
             foreach (var item in Data)
             {
                 if (item != null && !item.IsConverted)
-                    data.SetData(item.Format, item.GetClipboardData());
+                {
+                    var arg = item.GetClipboardData();
+                    if (arg != null)
+                    data.SetData(item.Format, arg);
+                }
             }
 
-            data.SetData(InternalFormat, Time.ToUniversalTime().Ticks);
-            System.Diagnostics.Debug.WriteLine("Clipboard set to " + Time.ToString("HH:mm:ss"));
-            Clipboard.SetDataObject(data, true);
+            data.SetData(InternalFormat, Id, false);
+            System.Diagnostics.Debug.WriteLine("Clipboard set to " + Date.ToString("HH:mm:ss"));
+            Clipboard.SetDataObject(data, false);
         }
 
         public Stream Serialize()
@@ -349,7 +362,7 @@ namespace Reflection
             string type = "Type: ";
             type = type.Remove(type.Length - 2, 2);
 
-            return (type + Environment.NewLine + "Time: " + Time.ToLongDateString() + " " + Time.ToLongTimeString() + Environment.NewLine/* + HtmlInfo*/).Trim();
+            return (type + Environment.NewLine + "Time: " + Date.ToLongDateString() + " " + Date.ToLongTimeString() + Environment.NewLine/* + HtmlInfo*/).Trim();
         }
     }
 }

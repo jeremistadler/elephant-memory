@@ -12,7 +12,7 @@ namespace Reflection.Tests
         {
             var snapps = Enumerable.Range(0, 10).Select(f => new ClipboardSnapshot
             {
-                Time = DateTime.UtcNow.AddSeconds(f),
+                Date = DateTime.UtcNow.AddSeconds(f),
                 Data = new SnapshotDataBase[] { new SnapshotStringData { Format = System.Windows.DataFormats.UnicodeText, Data = "UnitTest" + f } }
             }).ToArray();
 
@@ -24,14 +24,14 @@ namespace Reflection.Tests
 
             for (int i = 0; i < snapps.Length - 1; i++)
             {
-                var next = tableClipStorage.GetNext(snapps[i].Time);
-                Assert.AreEqual(next.Result.Time, snapps[i + 1].Time);
+                var next = tableClipStorage.GetNext(snapps[i].Date);
+                Assert.AreEqual(next.Result.Date, snapps[i + 1].Date);
             }
 
             for (int i = snapps.Length - 1; i > 0; i--)
             {
-                var next = tableClipStorage.GetPrevious(snapps[i].Time);
-                Assert.AreEqual(next.Result.Time, snapps[i - 1].Time);
+                var next = tableClipStorage.GetPrevious(snapps[i].Date);
+                Assert.AreEqual(next.Result.Date, snapps[i - 1].Date);
             }
         }
 
@@ -40,7 +40,7 @@ namespace Reflection.Tests
         {
             var snapps = Enumerable.Range(0, 40).Select(f => new ClipboardSnapshot
             {
-                Time = DateTime.UtcNow.AddSeconds(f),
+                Date = DateTime.UtcNow.AddSeconds(f),
                 Data = new SnapshotDataBase[] { new SnapshotStringData { Format = System.Windows.DataFormats.UnicodeText, Data = "UnitTest" + f } }
             }).ToArray();
 
@@ -50,15 +50,15 @@ namespace Reflection.Tests
                 tableClipStorage.Save(item).Wait();
             }
 
-            ClipboardSnapshot[] list = null;
-            tableClipStorage.GetRelated(snapps[snapps.Length / 2].Time, f => list = f).Wait();
+            ClipboardSnapshotPointer[] list = null;
+            tableClipStorage.GetRelated(snapps[snapps.Length / 2].Date, f => list = f).Wait();
 
             for (int i = 0; i < list.Length; i++)
             {
                 if (i > 0)
-                    Assert.IsTrue(list[i].Time > list[i - 1].Time);
+                    Assert.IsTrue(list[i].Date > list[i - 1].Date);
 
-                Assert.IsTrue(snapps.Any(f => f.Time == list[i].Time));
+                Assert.IsTrue(snapps.Any(f => f.Date == list[i].Date));
             }
         }
     }
