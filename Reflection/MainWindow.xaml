@@ -20,7 +20,7 @@
         </Border.Effect>
 
         <Grid>
-            <TabControl x:Name="TabController" Margin="0,0,0,47">
+            <TabControl x:Name="TabController" Margin="0,0,0,55">
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
                         <Setter Property="Template">
@@ -31,8 +31,7 @@
                                         VerticalAlignment="Center"
                                         HorizontalAlignment="Center"
                                         Text="{TemplateBinding Header}"
-                                        Margin="15,4" FontSize="16" FontFamily="Segoe UI Semilight"
-                                                   />
+                                        Margin="15,4" FontSize="16" FontFamily="Segoe UI Semilight"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
@@ -54,7 +53,7 @@
                     <RichTextBox x:Name="DataRtf"  BorderBrush="{x:Null}" BorderThickness="0" />
                 </TabItem>
                 <TabItem Header="Text" x:Name="TabText">
-                    <TextBox x:Name="DataText" BorderBrush="{x:Null}" BorderThickness="0"  ></TextBox>
+                    <TextBox x:Name="DataText" BorderBrush="{x:Null}" BorderThickness="0"></TextBox>
                 </TabItem>
                 <TabItem Header="Image" x:Name="TabImage">
                     <Image x:Name="DataImage"></Image>
@@ -66,7 +65,8 @@
                     <TextBox x:Name="DataHtml"  BorderBrush="{x:Null}" BorderThickness="0" ></TextBox>
                 </TabItem>
             </TabControl>
-            <TextBlock Margin="10,0,10,10" x:Name="TimeText" Height="30" VerticalAlignment="Bottom"/>
+            <TextBlock Margin="10,0,10,20" x:Name="TimeText" Height="30" VerticalAlignment="Bottom"/>
+            <Canvas Margin="10,0,10,10" x:Name="Timeline" Height="10" VerticalAlignment="Bottom"/>
         </Grid>
     </Border>
 

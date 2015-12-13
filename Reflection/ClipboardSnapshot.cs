@@ -49,6 +49,7 @@ namespace Reflection
     [ProtoInclude(40, typeof(SnapshotBoolData))]
     [ProtoInclude(50, typeof(SnapshotBitmapData))]
     [ProtoInclude(60, typeof(SnapshotBitmapDrawingData))]
+    [ProtoInclude(70, typeof(SnapshotNullData))]
     public abstract class SnapshotDataBase
     {
         [ProtoMember(1)]
@@ -56,7 +57,13 @@ namespace Reflection
         [ProtoMember(2)]
         public bool IsConverted { get; set; }
 
-        public abstract object GetData();
+        public abstract object GetClipboardData();
+        public override int GetHashCode() => (Format ?? "").GetHashCode() + IsConverted.GetHashCode() * 7345;
+        public override bool Equals(object other)
+        {
+            var o = other as SnapshotDataBase;
+            return o != null && o.Format == Format && o.IsConverted == IsConverted;
+        }
     }
 
     [ProtoContract]
@@ -65,7 +72,10 @@ namespace Reflection
         [ProtoMember(11)]
         public string Data { get; set; }
 
-        public override object GetData() => Data;
+        public override object GetClipboardData() => Data;
+        public override int GetHashCode() => base.GetHashCode() * 7345 + (Data ?? "").GetHashCode();
+        public override bool Equals(object other) => Equals(other as SnapshotStringData);
+        public bool Equals(SnapshotStringData other) => base.Equals(other) && other.Data == Data;
     }
 
     [ProtoContract]
@@ -73,7 +83,10 @@ namespace Reflection
     {
         [ProtoMember(21)]
         public string[] Data { get; set; }
-        public override object GetData() => Data;
+        public override object GetClipboardData() => Data;
+        public override int GetHashCode() => base.GetHashCode() * 7345 + (Data?.Length ?? -1);
+        public override bool Equals(object other) => Equals(other as SnapshotStringArrayData);
+        public bool Equals(SnapshotStringArrayData other) => base.Equals(other) && other.Data.ArraysEquals(Data);
     }
 
     [ProtoContract]
@@ -81,7 +94,10 @@ namespace Reflection
     {
         [ProtoMember(31)]
         public byte[] Data { get; set; }
-        public override object GetData() => Data;
+        public override object GetClipboardData() => Data;
+        public override int GetHashCode() => base.GetHashCode() * 7345 + (Data?.Length ?? -1);
+        public override bool Equals(object other) => Equals(other as SnapshotRawData);
+        public bool Equals(SnapshotRawData other) => base.Equals(other) && other.Data.ArraysEquals(Data);
     }
 
     [ProtoContract]
@@ -89,7 +105,10 @@ namespace Reflection
     {
         [ProtoMember(41)]
         public bool Data { get; set; }
-        public override object GetData() => Data;
+        public override object GetClipboardData() => Data;
+        public override int GetHashCode() => base.GetHashCode() * 7345 + (Data ? 1 : 0);
+        public override bool Equals(object other) => Equals(other as SnapshotBoolData);
+        public bool Equals(SnapshotBoolData other) => base.Equals(other) && other.Data == Data;
     }
 
     [ProtoContract]
@@ -97,7 +116,7 @@ namespace Reflection
     {
         [ProtoMember(51)]
         public byte[] Data { get; set; }
-        public override object GetData() {
+        public override object GetClipboardData() {
             using (MemoryStream stream = new MemoryStream(Data))
             {
                 BitmapImage bi = new BitmapImage();
@@ -108,6 +127,18 @@ namespace Reflection
                 return bi;
             }
         }
+
+        public override int GetHashCode() => base.GetHashCode() * 7345 + Data?.Length ?? -1;
+        public override bool Equals(object other) => Equals(other as SnapshotBitmapData);
+        public bool Equals(SnapshotBitmapData other) => base.Equals(other) && other.Data.ArraysEquals(Data);
+    }
+
+    [ProtoContract]
+    public class SnapshotNullData : SnapshotDataBase
+    {
+        public override object GetClipboardData() => null;
+        public override int GetHashCode() => base.GetHashCode();
+        public override bool Equals(object other) => base.Equals(other as SnapshotNullData);
     }
 
     [ProtoContract]
@@ -115,7 +146,11 @@ namespace Reflection
     {
         [ProtoMember(61)]
         public byte[] Data { get; set; }
-        public override object GetData() => new System.Drawing.Bitmap(new MemoryStream(Data));
+        public override object GetClipboardData() => new System.Drawing.Bitmap(new MemoryStream(Data));
+
+        public override int GetHashCode() => base.GetHashCode() * 7345 + Data?.Length ?? -1;
+        public override bool Equals(object other) => Equals(other as SnapshotBitmapDrawingData);
+        public bool Equals(SnapshotBitmapDrawingData other) => base.Equals(other) && other.Data.ArraysEquals(Data);
     }
 
 
@@ -130,6 +165,9 @@ namespace Reflection
         public SnapshotDataBase[] Data { get; set; }
 
 
+        const string InternalFormat = "reflectionid";
+        public bool IsNew => !Data.Any(f => f.Format == InternalFormat);
+
         public static ClipboardSnapshot CreateEmptySnapshot(DateTime time)
         {
             return new ClipboardSnapshot
@@ -139,6 +177,45 @@ namespace Reflection
             };
         }
 
+        static SnapshotDataBase ClipboardDataToSnapshot(IDataObject clipboard, string format, bool isConverted)
+        {
+            try
+            {
+                var data = clipboard.GetData(format, true);
+
+                if (data is string) return new SnapshotStringData { Format = format, Data = (string)data, IsConverted = isConverted };
+                if (data is string[]) return new SnapshotStringArrayData { Format = format, Data = (string[])data, IsConverted = isConverted };
+                if (data is bool) return new SnapshotBoolData { Format = format, Data = (bool)data, IsConverted = isConverted };
+                if (data is InteropBitmap)
+                {
+                    var pngStream = new MemoryStream();
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(data as InteropBitmap));
+                    encoder.Save(pngStream);
+                    return new SnapshotBitmapData { Format = format, Data = pngStream.ToArray(), IsConverted = isConverted };
+                }
+                if (data is System.Drawing.Bitmap)
+                {
+                    var bitmap = (System.Drawing.Bitmap)data;
+                    var pngStream = new MemoryStream();
+                    bitmap.Save(pngStream, bitmap.RawFormat);
+                    return new SnapshotBitmapDrawingData { Format = format, Data = pngStream.ToArray(), IsConverted = isConverted };
+                }
+                if (data is MemoryStream)
+                {
+                    var mem = ((MemoryStream)data);
+                    if (mem.Length > 1024 * 1024 * 10) return new SnapshotRawData { Format = format, IsConverted = isConverted };
+                    return new SnapshotRawData { Format = format, Data = mem.ToArray(), IsConverted = isConverted };
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debugger.Break();
+            }
+
+            return new SnapshotNullData { Format = format, IsConverted = isConverted };
+        }
+
         public static ClipboardSnapshot TryCreateSnapshot(IDataObject data)
         {
             try
@@ -146,51 +223,11 @@ namespace Reflection
                 var exactFormats = data.GetFormats(false);
                 var convertableFormats = data.GetFormats(true);
 
-                if (exactFormats.Contains("reflectionid"))
-                    return null;
-
                 var clip = new ClipboardSnapshot { 
-                    Time = DateTime.Now
+                    Time = DateTime.UtcNow
                 };
 
-
-                clip.Data = convertableFormats.Select<string, SnapshotDataBase>(f =>
-                {
-                    try
-                    {
-                        var isConverted = exactFormats.Contains(f);
-                        var obj = data.GetData(f, true);
-
-                        if (obj is string) return new SnapshotStringData { Format = f, Data = (string)obj, IsConverted = isConverted };
-                        if (obj is string[]) return new SnapshotStringArrayData { Format = f, Data = (string[])obj, IsConverted = isConverted };
-                        if (obj is bool) return new SnapshotBoolData { Format = f, Data = (bool)obj, IsConverted = isConverted };
-                        if (obj is InteropBitmap)
-                        {
-                            var pngStream = new MemoryStream();
-                            var encoder = new PngBitmapEncoder();
-                            encoder.Frames.Add(BitmapFrame.Create(obj as InteropBitmap));
-                            encoder.Save(pngStream);
-                            return new SnapshotBitmapData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
-                        }
-                        if (obj is System.Drawing.Bitmap)
-                        {
-                            var bitmap = (System.Drawing.Bitmap)obj;
-                            var pngStream = new MemoryStream();
-                            bitmap.Save(pngStream, bitmap.RawFormat);
-                            return new SnapshotBitmapDrawingData { Format = f, Data = pngStream.ToArray(), IsConverted = isConverted };
-                        }
-                        if (obj is MemoryStream) {
-                            var d = ((MemoryStream)obj).ToArray();
-                            return new SnapshotRawData { Format = f, Data = d, IsConverted = isConverted };
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                    }
-
-                    return null;
-                }).ToArray();
-
+                clip.Data = convertableFormats.Select(f => ClipboardDataToSnapshot(data, f, exactFormats.Contains(f))).ToArray();
                 return clip;
             }
             catch (Exception)
@@ -211,11 +248,11 @@ namespace Reflection
             var data = new DataObject();
             foreach (var item in Data)
             {
-                if (!item.IsConverted)
-                    data.SetData(item.Format, item.GetData());
+                if (item != null && !item.IsConverted)
+                    data.SetData(item.Format, item.GetClipboardData());
             }
 
-            data.SetData("reflectionid", Time.Ticks);
+            data.SetData(InternalFormat, Time.ToUniversalTime().Ticks);
             System.Diagnostics.Debug.WriteLine("Clipboard set to " + Time.ToString("HH:mm:ss"));
             Clipboard.SetDataObject(data, true);
         }
@@ -298,7 +335,13 @@ namespace Reflection
 
         public bool EqualsExceptTime(ClipboardSnapshot other)
         {
-            return Data.ArraysEquals(other.Data);
+            if (other == null) return false;
+            if (other.Data.Length != Data.Length) return false;
+
+            for (int i = 0; i < Data.Length; i++)
+                if (!Data[i].Equals(other.Data[i])) return false;
+
+            return true;
         }
 
         public override string ToString()

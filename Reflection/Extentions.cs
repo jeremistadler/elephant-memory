@@ -21,8 +21,8 @@ namespace Reflection
         public static bool ArraysEquals<T>(this T[] array1, T[] array2)
         {
             if (array1 == array2) return true;
-            if (array1 == null || array2 == null)
-                return false;
+            if (array1 == null || array2 == null) return false;
+            if (array1.Length != array2.Length) return false;
 
             return array1.SequenceEqual(array2); 
         }
